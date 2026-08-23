@@ -1,13 +1,29 @@
 /*
- * main.c
- * Point d'entree de l'application
- * Projet : Gestionnaire de Bibliotheque - Langage C
- * Prof. Patrick Mukala - UPN L2 Informatique 2025-2026
- *
- * Ce fichier contient la fonction principale et les menus de navigation.
- * Il orchestre les differents modules : livres, emprunteurs, emprunts.
- * Architecture : separation claire entre la logique metier (modules .c)
- * et l'interface utilisateur (ce fichier + utils.c).
+ * ============================================================================
+ * PROJET : Gestionnaire de Bibliotheque
+ * ============================================================================
+ * 
+ * INTRODUCTION :
+ *   Ce programme est un systeme de gestion de bibliotheque permettant de
+ *   gerer les livres, les emprunteurs et les emprunts de maniere efficace.
+ * 
+ * MOTIVATION :
+ *   Les bibliotheques traditionnelles utilisent des registres papier qui
+ *   sont difficiles a consulter et a mettre a jour. Ce programme numerique
+ *   permet d'automatiser ces taches, de reduire les erreurs et de gagner
+ *   du temps.
+ * 
+ * OBJECTIFS :
+ *   1. Gerer un catalogue de livres (ajout, modification, suppression)
+ *   2. Gerer les adherents de la bibliotheque
+ *   3. Gerer les emprunts et retours de livres
+ *   4. Calculer automatiquement les amendes en cas de retard
+ *   5. Sauvegarder les donnees de maniere persistante
+ * 
+ * AUTEUR : [Ton Nom]
+ * DATE : 2025-2026
+ * PROFESSEUR : Patrick Mukala
+ * ============================================================================
  */
 
 #include <stdio.h>
@@ -17,17 +33,12 @@
 #include "emprunt.h"
 #include "utils.h"
 
-/*
- * Affiche les statistiques generales de la bibliotheque.
- * Compte les emprunts en cours, en retard, et le total des amendes.
- */
 void afficher_statistiques(const Livre *livres, int nb_livres,
                            const Emprunteur *emprunteurs, int nb_emprunteurs,
                            const Emprunt *emprunts, int nb_emprunts) {
     int emprunts_en_cours = 0;
     int emprunts_en_retard = 0;
     int total_amendes = 0;
-
     for (int i = 0; i < nb_emprunts; i++) {
         if (!emprunts[i].est_retourne) {
             emprunts_en_cours++;
@@ -38,7 +49,6 @@ void afficher_statistiques(const Livre *livres, int nb_livres,
         }
         total_amendes += emprunts[i].amendes;
     }
-
     printf("\n");
     afficher_titre("STATISTIQUES GENERALES");
     printf("  | %-35s | %-20d |\n", "Nombre total de livres", nb_livres);
@@ -50,39 +60,30 @@ void afficher_statistiques(const Livre *livres, int nb_livres,
     ligne_separation();
 }
 
-/*
- * Sauvegarde toutes les donnees dans les fichiers binaires.
- * Affiche le resultat de chaque sauvegarde.
- */
 void sauvegarder_tout(const Livre *livres, int nb_livres,
                       const Emprunteur *emprunteurs, int nb_emprunteurs,
                       const Emprunt *emprunts, int nb_emprunts) {
     printf("\n");
     afficher_titre("SAUVEGARDE DES DONNEES");
-
     int ok = 1;
-
     if (sauvegarder_livres(livres, nb_livres)) {
         printf("  [OK] Livres sauvegardes (%d)\n", nb_livres);
     } else {
         printf("  [ERREUR] Echec de la sauvegarde des livres\n");
         ok = 0;
     }
-
     if (sauvegarder_emprunteurs(emprunteurs, nb_emprunteurs)) {
         printf("  [OK] Emprunteurs sauvegardes (%d)\n", nb_emprunteurs);
     } else {
         printf("  [ERREUR] Echec de la sauvegarde des emprunteurs\n");
         ok = 0;
     }
-
     if (sauvegarder_emprunts(emprunts, nb_emprunts)) {
         printf("  [OK] Emprunts sauvegardes (%d)\n", nb_emprunts);
     } else {
         printf("  [ERREUR] Echec de la sauvegarde des emprunts\n");
         ok = 0;
     }
-
     if (ok) {
         afficher_succes("Toutes les donnees ont ete sauvegardees avec succes !");
     } else {
@@ -90,19 +91,13 @@ void sauvegarder_tout(const Livre *livres, int nb_livres,
     }
 }
 
-/*
- * Gestion du sous-menu des livres.
- * Boucle jusqu'a ce que l'utilisateur choisisse de retourner au menu principal.
- */
 void menu_livres(Livre **livres, int *nb_livres, int *capacite_livres) {
     int choix;
     char buffer[TAILLE_BUFFER];
-
     do {
         effacer_ecran();
         afficher_menu_livres();
         choix = lire_entier("\n  Votre choix : ");
-
         switch (choix) {
             case 1:
                 ajouter_livre(livres, nb_livres, capacite_livres);
@@ -139,25 +134,19 @@ void menu_livres(Livre **livres, int *nb_livres, int *capacite_livres) {
             default:
                 afficher_erreur("Choix invalide.");
         }
-
         if (choix != 0) {
             pause_console();
         }
     } while (choix != 0);
 }
 
-/*
- * Gestion du sous-menu des emprunteurs.
- */
 void menu_emprunteurs(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capacite_emprunteurs) {
     int choix;
     char buffer[TAILLE_BUFFER];
-
     do {
         effacer_ecran();
         afficher_menu_emprunteurs();
         choix = lire_entier("\n  Votre choix : ");
-
         switch (choix) {
             case 1:
                 ajouter_emprunteur(emprunteurs, nb_emprunteurs, capacite_emprunteurs);
@@ -186,27 +175,21 @@ void menu_emprunteurs(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capaci
             default:
                 afficher_erreur("Choix invalide.");
         }
-
         if (choix != 0) {
             pause_console();
         }
     } while (choix != 0);
 }
 
-/*
- * Gestion du sous-menu des emprunts.
- */
 void menu_emprunts(Emprunt **emprunts, int *nb_emprunts, int *capacite_emprunts,
                    Livre *livres, int nb_livres,
                    Emprunteur *emprunteurs, int nb_emprunteurs) {
     int choix;
     int id_emprunteur;
-
     do {
         effacer_ecran();
         afficher_menu_emprunts();
         choix = lire_entier("\n  Votre choix : ");
-
         switch (choix) {
             case 1:
                 emprunter_livre(emprunts, nb_emprunts, capacite_emprunts,
@@ -233,26 +216,20 @@ void menu_emprunts(Emprunt **emprunts, int *nb_emprunts, int *capacite_emprunts,
             default:
                 afficher_erreur("Choix invalide.");
         }
-
         if (choix != 0) {
             pause_console();
         }
     } while (choix != 0);
 }
 
-/*
- * Gestion du sous-menu des rapports et statistiques.
- */
 void menu_rapports(const Livre *livres, int nb_livres,
                    const Emprunteur *emprunteurs, int nb_emprunteurs,
                    const Emprunt *emprunts, int nb_emprunts) {
     int choix;
-
     do {
         effacer_ecran();
         afficher_menu_rapports();
         choix = lire_entier("\n  Votre choix : ");
-
         switch (choix) {
             case 1:
                 afficher_statistiques(livres, nb_livres, emprunteurs, nb_emprunteurs, emprunts, nb_emprunts);
@@ -276,51 +253,33 @@ void menu_rapports(const Livre *livres, int nb_livres,
             default:
                 afficher_erreur("Choix invalide.");
         }
-
         if (choix != 0) {
             pause_console();
         }
     } while (choix != 0);
 }
 
-/*
- * Fonction principale.
- * Initialise les tableaux dynamiques, charge les donnees depuis les fichiers,
- * affiche le menu principal et gere la boucle principale de l'application.
- * Sauvegarde automatiquement les donnees avant de quitter.
- * Libere toute la memoire allouee dynamiquement.
- */
 int main(void) {
-    /* Tableaux dynamiques pour les livres */
     Livre *livres = NULL;
     int nb_livres = 0;
     int capacite_livres = 0;
-
-    /* Tableaux dynamiques pour les emprunteurs */
     Emprunteur *emprunteurs = NULL;
     int nb_emprunteurs = 0;
     int capacite_emprunteurs = 0;
-
-    /* Tableaux dynamiques pour les emprunts */
     Emprunt *emprunts = NULL;
     int nb_emprunts = 0;
     int capacite_emprunts = 0;
-
     int choix;
 
-    /* Chargement des donnees depuis les fichiers binaires */
-    /* Si les fichiers n'existent pas (premier demarrage), les tableaux sont initialises vides */
     nb_livres = charger_livres(&livres, &capacite_livres);
     nb_emprunteurs = charger_emprunteurs(&emprunteurs, &capacite_emprunteurs);
     nb_emprunts = charger_emprunts(&emprunts, &capacite_emprunts);
 
-    /* Boucle principale de l'application */
     do {
         effacer_ecran();
         afficher_en_tete();
         afficher_menu_principal();
         choix = lire_entier("\n  Votre choix : ");
-
         switch (choix) {
             case 1:
                 menu_livres(&livres, &nb_livres, &capacite_livres);
@@ -351,10 +310,7 @@ int main(void) {
         }
     } while (choix != 0);
 
-    /* Sauvegarde automatique de toutes les donnees avant de quitter */
     sauvegarder_tout(livres, nb_livres, emprunteurs, nb_emprunteurs, emprunts, nb_emprunts);
-
-    /* Liberation de toute la memoire allouee dynamiquement */
     liberer_livres(&livres);
     liberer_emprunteurs(&emprunteurs);
     liberer_emprunts(&emprunts);
