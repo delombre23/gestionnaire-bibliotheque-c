@@ -5,7 +5,7 @@
  * Prof. Patrick Mukala - UPN L2 Informatique 2025-2026
  */
 
-#ifndef EMPRUNT_H
+#define DATE_MAX 16
 #define EMPRUNT_H
 
 #include "livre.h"
