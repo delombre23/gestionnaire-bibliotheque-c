@@ -3,17 +3,26 @@
  * Implementation du module de gestion des emprunts
  * Projet : Gestionnaire de Bibliotheque - Langage C
  * Prof. Patrick Mukala - UPN L2 Informatique 2025-2026
+ *
+ * Ce module gere toutes les operations liees aux emprunts :
+ * - Enregistrement d'un emprunt (verifie disponibilite et limites)
+ * - Retour d'un livre (calcule les amendes en cas de retard)
+ * - Affichage des emprunts en cours, en retard, historique
+ * - Calcul des dates (emprunt, retour prevue, retard)
+ * - Sauvegarde et chargement depuis fichier binaire
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
 #include "emprunt.h"
 #include "utils.h"
 
 /*
  * Obtient la date du jour au format JJ/MM/AAAA.
+ * Utilise la fonction time() et localtime() de la bibliotheque standard.
  */
 void obtenir_date_du_jour(char *date) {
     time_t maintenant = time(NULL);
@@ -26,18 +35,20 @@ void obtenir_date_du_jour(char *date) {
 
 /*
  * Convertit une date JJ/MM/AAAA en nombre de jours depuis une reference.
- * Permet de comparer deux dates.
+ * Permet de comparer deux dates et de calculer des differences.
+ * C'est une approximation suffisante pour ce projet.
  */
 static int date_en_jours(const char *date) {
     int jour, mois, annee;
     sscanf(date, "%d/%d/%d", &jour, &mois, &annee);
     
-    /* Simplification : nombre de jours approximatif */
+    /* Simplification : nombre de jours approximatif depuis l'an 0 */
     return annee * 365 + mois * 30 + jour;
 }
 
 /*
  * Compare deux dates au format JJ/MM/AAAA.
+ * Retourne : <0 si date1 < date2, 0 si egales, >0 si date1 > date2.
  */
 int comparer_dates(const char *date1, const char *date2) {
     return date_en_jours(date1) - date_en_jours(date2);
@@ -45,6 +56,7 @@ int comparer_dates(const char *date1, const char *date2) {
 
 /*
  * Calcule la date de retour prevue (date du jour + DUREE_EMPRUNT_JOURS).
+ * La duree d'emprunt standard est definie dans emprunt.h (14 jours).
  */
 void calculer_date_retour_prevue(const char *date_emprunt, char *date_retour) {
     int jours = date_en_jours(date_emprunt) + DUREE_EMPRUNT_JOURS;
@@ -55,12 +67,15 @@ void calculer_date_retour_prevue(const char *date_emprunt, char *date_retour) {
     
     if (mois == 0) { mois = 1; }
     if (jour == 0) { jour = 1; }
+    if (mois > 12) { mois = 12; }
     
     snprintf(date_retour, DATE_MAX, "%02d/%02d/%04d", jour, mois, annee);
 }
 
 /*
  * Calcule le nombre de jours de retard pour un emprunt.
+ * Compare la date du jour avec la date de retour prevue.
+ * Retourne le nombre de jours de retard (0 si pas de retard).
  */
 int calculer_jours_retard(const char *date_retour_prevue) {
     char date_aujourd_hui[DATE_MAX];
@@ -75,6 +90,9 @@ int calculer_jours_retard(const char *date_retour_prevue) {
 
 /*
  * Calcule le montant des amendes pour un emprunt.
+ * Si l'emprunt est deja retourne, retourne les amendes deja calculees.
+ * Sinon, calcule en fonction du retard actuel.
+ * Le taux est defini dans emprunt.h (500 FC par jour).
  */
 int calculer_amendes(const Emprunt *emprunt) {
     if (emprunt->est_retourne) {
@@ -86,6 +104,8 @@ int calculer_amendes(const Emprunt *emprunt) {
 
 /*
  * Verifie si un livre est disponible pour l'emprunt.
+ * Un livre est disponible si nb_disponibles > 0.
+ * Retourne 1 si disponible, 0 sinon.
  */
 int verifier_disponibilite(const Livre *livres, int nb_livres, int id_livre) {
     int index = rechercher_livre_par_id(livres, nb_livres, id_livre);
@@ -94,7 +114,9 @@ int verifier_disponibilite(const Livre *livres, int nb_livres, int id_livre) {
 }
 
 /*
- * Compte le nombre d'emprunts actifs d'un emprunteur.
+ * Compte le nombre d'emprunts actifs (non retournes) d'un emprunteur.
+ * Utilisee pour verifier la limite d'emprunts simultanes.
+ * Retourne le nombre d'emprunts en cours.
  */
 int compter_emprunts_actifs(const Emprunt *emprunts, int nb_emprunts, int id_emprunteur) {
     int count = 0;
@@ -108,6 +130,12 @@ int compter_emprunts_actifs(const Emprunt *emprunts, int nb_emprunts, int id_emp
 
 /*
  * Enregistre un nouvel emprunt.
+ * Verifications effectuees :
+ *   - Le livre existe et est disponible
+ *   - L'emprunteur existe
+ *   - L'emprunteur n'a pas atteint la limite d'emprunts simultanes (5)
+ * Mise a jour des compteurs : nb_disponibles du livre, nb_emprunts_actifs de l'emprunteur.
+ * Retourne 1 en cas de succes, 0 en cas d'echec.
  */
 int emprunter_livre(Emprunt **emprunts, int *nb_emprunts, int *capacite,
                     Livre *livres, int nb_livres,
@@ -128,13 +156,13 @@ int emprunter_livre(Emprunt **emprunts, int *nb_emprunts, int *capacite,
         return 0;
     }
 
-    /* Verification de la disponibilite */
+    /* Verification de la disponibilite du livre */
     if (livres[idx_livre].nb_disponibles <= 0) {
         afficher_erreur("Ce livre n'est pas disponible (tous les exemplaires sont empruntes).");
         return 0;
     }
 
-    /* Affichage du livre */
+    /* Affichage du livre selectionne */
     printf("\n  Livre selectionne :\n");
     afficher_livre(&livres[idx_livre]);
 
@@ -147,7 +175,7 @@ int emprunter_livre(Emprunt **emprunts, int *nb_emprunts, int *capacite,
         return 0;
     }
 
-    /* Verification du nombre d'emprunts actifs */
+    /* Verification du nombre d'emprunts actifs de l'emprunteur */
     int emprunts_actifs = compter_emprunts_actifs(*emprunts, *nb_emprunts, id_emprunteur);
     if (emprunts_actifs >= MAX_EMPRUNTS_PAR_EMPRUNTEUR) {
         afficher_erreur("Cet emprunteur a atteint le maximum d'emprunts simultanes (5).");
@@ -156,6 +184,7 @@ int emprunter_livre(Emprunt **emprunts, int *nb_emprunts, int *capacite,
 
     printf("\n  Emprunteur : %s %s\n", emprunteurs[idx_emprunteur].prenom, emprunteurs[idx_emprunteur].nom);
 
+    /* Confirmation de l'utilisateur */
     if (!demander_confirmation("\n  Confirmer l'emprunt ?")) {
         afficher_info("Emprunt annule.");
         return 0;
@@ -175,31 +204,37 @@ int emprunter_livre(Emprunt **emprunts, int *nb_emprunts, int *capacite,
     livres[idx_livre].nb_disponibles--;
     emprunteurs[idx_emprunteur].nb_emprunts_actifs++;
 
-    /* Reallocation si necessaire */
+    /* Reallocation dynamique si le tableau est plein */
     if (*nb_emprunts >= *capacite) {
         int nouvelle_capacite = *capacite * 2;
         Emprunt *temp = (Emprunt *)realloc(*emprunts, nouvelle_capacite * sizeof(Emprunt));
         if (temp == NULL) {
-            afficher_erreur("Erreur d'allocation memoire.");
+            afficher_erreur("Erreur d'allocation memoire. Impossible d'enregistrer l'emprunt.");
+            /* Annulation des modifications */
+            livres[idx_livre].nb_disponibles++;
+            emprunteurs[idx_emprunteur].nb_emprunts_actifs--;
             return 0;
         }
         *emprunts = temp;
         *capacite = nouvelle_capacite;
     }
 
-    /* Ajout de l'emprunt */
+    /* Ajout de l'emprunt a la fin du tableau */
     (*emprunts)[*nb_emprunts] = nouvel_emprunt;
     (*nb_emprunts)++;
 
     afficher_succes("Emprunt enregistre avec succes !");
-    printf("  Date d'emprunt      : %s\n", nouvel_emprunt.date_emprunt);
-    printf("  Date de retour prevue : %s\n", nouvel_emprunt.date_retour_prevue);
+    printf("  Date d'emprunt         : %s\n", nouvel_emprunt.date_emprunt);
+    printf("  Date de retour prevue  : %s\n", nouvel_emprunt.date_retour_prevue);
 
     return 1;
 }
 
 /*
  * Enregistre le retour d'un livre.
+ * Calcule automatiquement les amendes en cas de retard.
+ * Mise a jour des compteurs : nb_disponibles du livre, nb_emprunts_actifs de l'emprunteur.
+ * Retourne 1 en cas de succes, 0 en cas d'echec.
  */
 int retourner_livre(Emprunt *emprunts, int nb_emprunts,
                     Livre *livres, int nb_livres,
@@ -212,7 +247,7 @@ int retourner_livre(Emprunt *emprunts, int nb_emprunts,
 
     id_emprunt = lire_entier("  ID de l'emprunt : ");
 
-    /* Recherche de l'emprunt */
+    /* Recherche de l'emprunt actif (non retourne) */
     idx_emprunt = -1;
     for (int i = 0; i < nb_emprunts; i++) {
         if (emprunts[i].id == id_emprunt && !emprunts[i].est_retourne) {
@@ -226,6 +261,7 @@ int retourner_livre(Emprunt *emprunts, int nb_emprunts,
         return 0;
     }
 
+    /* Recuperation des index du livre et de l'emprunteur */
     idx_livre = rechercher_livre_par_id(livres, nb_livres, emprunts[idx_emprunt].id_livre);
     idx_emprunteur = rechercher_emprunteur_par_id(emprunteurs, nb_emprunteurs, emprunts[idx_emprunt].id_emprunteur);
 
@@ -234,11 +270,12 @@ int retourner_livre(Emprunt *emprunts, int nb_emprunts,
     int jours_retard = calculer_jours_retard(emprunts[idx_emprunt].date_retour_prevue);
     emprunts[idx_emprunt].amendes = jours_retard * AMENDE_PAR_JOUR;
 
+    /* Affichage des informations du retour */
     printf("\n  Livre : %s\n", (idx_livre != -1) ? livres[idx_livre].titre : "Inconnu");
     printf("  Emprunteur : %s %s\n", 
            (idx_emprunteur != -1) ? emprunteurs[idx_emprunteur].prenom : "?",
            (idx_emprunteur != -1) ? emprunteurs[idx_emprunteur].nom : "?");
-    printf("  Date de retour prevue : %s\n", emprunts[idx_emprunt].date_retour_prevue);
+    printf("  Date de retour prevue    : %s\n", emprunts[idx_emprunt].date_retour_prevue);
     printf("  Date de retour effective : %s\n", emprunts[idx_emprunt].date_retour_effective);
     
     if (jours_retard > 0) {
@@ -248,14 +285,16 @@ int retourner_livre(Emprunt *emprunts, int nb_emprunts,
         printf("  Pas de retard. Aucune amende.\n");
     }
 
+    /* Confirmation de l'utilisateur */
     if (!demander_confirmation("\n  Confirmer le retour ?")) {
+        /* Annulation : reinitialise les champs modifies */
         strcpy(emprunts[idx_emprunt].date_retour_effective, "");
         emprunts[idx_emprunt].amendes = 0;
         afficher_info("Retour annule.");
         return 0;
     }
 
-    /* Mise a jour */
+    /* Mise a jour definitive */
     emprunts[idx_emprunt].est_retourne = 1;
     
     if (idx_livre != -1) {
@@ -270,7 +309,8 @@ int retourner_livre(Emprunt *emprunts, int nb_emprunts,
 }
 
 /*
- * Affiche l'historique complet des emprunts.
+ * Affiche l'historique complet de tous les emprunts.
+ * Affiche un message si aucun emprunt n'est enregistre.
  */
 void afficher_historique_emprunts(const Emprunt *emprunts, int nb_emprunts) {
     if (nb_emprunts == 0) {
@@ -280,9 +320,9 @@ void afficher_historique_emprunts(const Emprunt *emprunts, int nb_emprunts) {
 
     printf("\n");
     afficher_titre("HISTORIQUE COMPLET DES EMPRUNTS");
-    printf("  +------+---------+-------------+------------------+------------------+----------+--------+\n");
+    printf("  +------+---------+-------------+------------------+------------------+----------+--------+%c\n", ' ');
     printf("  | ID   | ID Livre| ID Emprunt. | Date Emprunt     | Retour Prevue    | Retourne | Amende |\n");
-    printf("  +------+---------+-------------+------------------+------------------+----------+--------+\n");
+    printf("  +------+---------+-------------+------------------+------------------+----------+--------+%c\n", ' ');
 
     for (int i = 0; i < nb_emprunts; i++) {
         printf("  | %-4d | %-7d | %-11d | %-16s | %-16s | %-8s | %-6d |\n",
@@ -295,12 +335,13 @@ void afficher_historique_emprunts(const Emprunt *emprunts, int nb_emprunts) {
                emprunts[i].amendes);
     }
 
-    printf("  +------+---------+-------------+------------------+------------------+----------+--------+\n");
+    printf("  +------+---------+-------------+------------------+------------------+----------+--------+%c\n", ' ');
     printf("  Total : %d emprunt(s)\n", nb_emprunts);
 }
 
 /*
- * Affiche les emprunts en cours.
+ * Affiche les emprunts en cours (non retournes).
+ * Affiche le titre du livre, le nom de l'emprunteur, la date de retour prevue et le retard eventuel.
  */
 void afficher_emprunts_en_cours(const Emprunt *emprunts, int nb_emprunts,
                                 const Livre *livres, int nb_livres,
@@ -318,7 +359,7 @@ void afficher_emprunts_en_cours(const Emprunt *emprunts, int nb_emprunts,
                 printf("  +------+---------------------------+----------------------+------------------+----------+\n");
             }
 
-            /* Recherche des infos */
+            /* Recherche des informations du livre et de l'emprunteur */
             const char *titre_livre = "Inconnu";
             const char *nom_emprunteur = "Inconnu";
             
@@ -360,7 +401,8 @@ void afficher_emprunts_en_cours(const Emprunt *emprunts, int nb_emprunts,
 }
 
 /*
- * Affiche les emprunts en retard.
+ * Affiche les emprunts en retard (date prevue passee et non retournes).
+ * Affiche le montant des amendes dues pour chaque emprunt en retard.
  */
 void afficher_emprunts_en_retard(const Emprunt *emprunts, int nb_emprunts,
                                  const Livre *livres, int nb_livres,
@@ -415,6 +457,7 @@ void afficher_emprunts_en_retard(const Emprunt *emprunts, int nb_emprunts,
 
 /*
  * Affiche l'historique des emprunts d'un emprunteur specifique.
+ * Affiche tous les emprunts (retournes et non retournes) de cet emprunteur.
  */
 void afficher_historique_par_emprunteur(const Emprunt *emprunts, int nb_emprunts,
                                         int id_emprunteur,
@@ -458,22 +501,28 @@ void afficher_historique_par_emprunteur(const Emprunt *emprunts, int nb_emprunts
 
 /*
  * Sauvegarde les emprunts dans un fichier binaire.
+ * Format du fichier : [int nb_emprunts][Emprunt emprunt1]...
+ * Gestion des erreurs : fichier inaccessible, erreur d'ecriture.
+ * Retourne 1 en cas de succes, 0 en cas d'echec.
  */
 int sauvegarder_emprunts(const Emprunt *emprunts, int nb_emprunts) {
     FILE *fichier = fopen(FICHIER_EMPRUNTS, "wb");
     if (fichier == NULL) {
         afficher_erreur("Impossible d'ouvrir le fichier de sauvegarde des emprunts.");
+        afficher_erreur(strerror(errno));
         return 0;
     }
 
     if (fwrite(&nb_emprunts, sizeof(int), 1, fichier) != 1) {
         fclose(fichier);
+        afficher_erreur("Erreur lors de l'ecriture du nombre d'emprunts.");
         return 0;
     }
 
     if (nb_emprunts > 0) {
         if (fwrite(emprunts, sizeof(Emprunt), (size_t)nb_emprunts, fichier) != (size_t)nb_emprunts) {
             fclose(fichier);
+            afficher_erreur("Erreur lors de l'ecriture des emprunts.");
             return 0;
         }
     }
@@ -484,20 +533,28 @@ int sauvegarder_emprunts(const Emprunt *emprunts, int nb_emprunts) {
 
 /*
  * Charge les emprunts depuis un fichier binaire.
+ * Alloue dynamiquement le tableau avec la capacite initiale.
+ * Gestion des erreurs : fichier inexistant (premier demarrage), corruption, memoire insuffisante.
+ * Retourne le nombre d'emprunts charges.
  */
 int charger_emprunts(Emprunt **emprunts, int *capacite) {
     FILE *fichier = fopen(FICHIER_EMPRUNTS, "rb");
     int nb_emprunts = 0;
 
     if (fichier == NULL) {
+        /* Le fichier n'existe pas encore : c'est normal au premier demarrage */
         *capacite = CAPACITE_INITiale;
         *emprunts = (Emprunt *)malloc(*capacite * sizeof(Emprunt));
-        if (*emprunts == NULL) return 0;
+        if (*emprunts == NULL) {
+            afficher_erreur("Erreur d'allocation memoire pour les emprunts.");
+            return 0;
+        }
         return 0;
     }
 
     if (fread(&nb_emprunts, sizeof(int), 1, fichier) != 1) {
         fclose(fichier);
+        afficher_erreur("Erreur lors de la lecture du fichier d'emprunts (fichier corrompu ?).");
         *capacite = CAPACITE_INITiale;
         *emprunts = (Emprunt *)malloc(*capacite * sizeof(Emprunt));
         return 0;
@@ -507,11 +564,20 @@ int charger_emprunts(Emprunt **emprunts, int *capacite) {
     *emprunts = (Emprunt *)malloc(*capacite * sizeof(Emprunt));
     if (*emprunts == NULL) {
         fclose(fichier);
+        afficher_erreur("Erreur d'allocation memoire pour les emprunts.");
+        *capacite = 0;
         return 0;
     }
 
     if (nb_emprunts > 0) {
-        fread(*emprunts, sizeof(Emprunt), (size_t)nb_emprunts, fichier);
+        if (fread(*emprunts, sizeof(Emprunt), (size_t)nb_emprunts, fichier) != (size_t)nb_emprunts) {
+            fclose(fichier);
+            free(*emprunts);
+            *emprunts = NULL;
+            *capacite = 0;
+            afficher_erreur("Erreur lors de la lecture des emprunts (fichier incomplet ?).");
+            return 0;
+        }
     }
 
     fclose(fichier);
@@ -519,7 +585,8 @@ int charger_emprunts(Emprunt **emprunts, int *capacite) {
 }
 
 /*
- * Libere la memoire allouee pour les emprunts.
+ * Libere la memoire allouee pour le tableau d'emprunts.
+ * Met le pointeur a NULL apres liberation pour eviter les dangling pointers.
  */
 void liberer_emprunts(Emprunt **emprunts) {
     if (*emprunts != NULL) {
