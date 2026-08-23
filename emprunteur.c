@@ -3,25 +3,37 @@
  * Implementation du module de gestion des emprunteurs
  * Projet : Gestionnaire de Bibliotheque - Langage C
  * Prof. Patrick Mukala - UPN L2 Informatique 2025-2026
+ *
+ * Ce module gere toutes les operations liees aux emprunteurs (adherents) :
+ * - Ajout, modification, suppression
+ * - Recherche par ID, nom, numero de carte
+ * - Affichage de tous les emprunteurs
+ * - Sauvegarde et chargement depuis fichier binaire
+ * - Validation des donnees (telephone, email)
+ * - Generation automatique du numero de carte
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include "emprunteur.h"
 #include "utils.h"
 
 /*
  * Genere un numero de carte unique au format "CARTE-XXXX".
  * XXXX est l'identifiant sur 4 chiffres avec zeros a gauche.
+ * Exemple : CARTE-0001, CARTE-0042, CARTE-1234
  */
 void generer_numero_carte(char *numero_carte, int id) {
     snprintf(numero_carte, NUMERO_CARTE_MAX, "CARTE-%04d", id);
 }
 
 /*
- * Valide un numero de telephone (chiffres, espaces, tirets, +).
+ * Valide un numero de telephone.
+ * Accepte les chiffres, espaces, tirets, parentheses et le signe +.
+ * Doit contenir au moins 8 chiffres.
  * Retourne 1 si valide, 0 sinon.
  */
 int valider_telephone(const char *telephone) {
@@ -44,7 +56,8 @@ int valider_telephone(const char *telephone) {
 }
 
 /*
- * Valide une adresse email (format basique : contient @ et .).
+ * Valide une adresse email (format basique).
+ * Doit contenir exactement un @ et au moins un point apres le @.
  * Retourne 1 si valide, 0 sinon.
  */
 int valider_email(const char *email) {
@@ -70,10 +83,10 @@ int valider_email(const char *email) {
 
 /*
  * Affiche les details d'un seul emprunteur sous forme de ligne formatee.
+ * Utilisee dans les tableaux d'affichage.
  */
 void afficher_emprunteur(const Emprunteur *emprunteur) {
-    printf("  | %-4d | %-12s | %-15s | %-15s | %-15s | %2d |
-",
+    printf("  | %-4d | %-12s | %-15s | %-15s | %-15s | %2d |\n",
            emprunteur->id,
            emprunteur->numero_carte,
            emprunteur->nom,
@@ -84,6 +97,7 @@ void afficher_emprunteur(const Emprunteur *emprunteur) {
 
 /*
  * Affiche la liste complete de tous les emprunteurs avec en-tete de tableau.
+ * Affiche un message si aucun emprunteur n'est enregistre.
  */
 void afficher_tous_les_emprunteurs(const Emprunteur *emprunteurs, int nb_emprunteurs) {
     if (nb_emprunteurs == 0) {
@@ -93,25 +107,21 @@ void afficher_tous_les_emprunteurs(const Emprunteur *emprunteurs, int nb_emprunt
 
     printf("\n");
     afficher_titre("LISTE DES EMPRUNTEURS");
-    printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
-    printf("  | ID   | No Carte     | Nom             | Prenom          | Telephone       | Em.|
-");
-    printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
+    printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
+    printf("  | ID   | No Carte     | Nom             | Prenom          | Telephone       | Em.|\n");
+    printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
 
     for (int i = 0; i < nb_emprunteurs; i++) {
         afficher_emprunteur(&emprunteurs[i]);
     }
 
-    printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
-    printf("  Total : %d emprunteur(s)
-", nb_emprunteurs);
+    printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
+    printf("  Total : %d emprunteur(s)\n", nb_emprunteurs);
 }
 
 /*
  * Recherche un emprunteur par son identifiant.
+ * Parcours lineaire du tableau O(n).
  * Retourne l'index dans le tableau, ou -1 si non trouve.
  */
 int rechercher_emprunteur_par_id(const Emprunteur *emprunteurs, int nb_emprunteurs, int id) {
@@ -124,8 +134,9 @@ int rechercher_emprunteur_par_id(const Emprunteur *emprunteurs, int nb_emprunteu
 }
 
 /*
- * Recherche des emprunteurs par nom (recherche partielle, insensible a la casse).
- * Affiche les resultats trouves.
+ * Recherche des emprunteurs par nom ou prenom (recherche partielle, insensible a la casse).
+ * Utilise la fonction contient_sous_chaine() de utils.c.
+ * Affiche les resultats trouves sous forme de tableau.
  */
 void rechercher_emprunteur_par_nom(const Emprunteur *emprunteurs, int nb_emprunteurs, const char *nom) {
     int count = 0;
@@ -137,12 +148,9 @@ void rechercher_emprunteur_par_nom(const Emprunteur *emprunteurs, int nb_emprunt
         if (contient_sous_chaine(emprunteurs[i].nom, nom) ||
             contient_sous_chaine(emprunteurs[i].prenom, nom)) {
             if (count == 0) {
-                printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
-                printf("  | ID   | No Carte     | Nom             | Prenom          | Telephone       | Em.|
-");
-                printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
+                printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
+                printf("  | ID   | No Carte     | Nom             | Prenom          | Telephone       | Em.|\n");
+                printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
             }
             afficher_emprunteur(&emprunteurs[i]);
             count++;
@@ -150,18 +158,16 @@ void rechercher_emprunteur_par_nom(const Emprunteur *emprunteurs, int nb_emprunt
     }
 
     if (count > 0) {
-        printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
-        printf("  %d resultat(s) trouve(s)
-", count);
+        printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
+        printf("  %d resultat(s) trouve(s)\n", count);
     } else {
         afficher_info("Aucun emprunteur trouve avec ce nom.");
     }
 }
 
 /*
- * Recherche un emprunteur par son numero de carte exact.
- * Affiche le resultat trouve.
+ * Recherche un emprunteur par son numero de carte exact (comparaison stricte).
+ * Affiche le resultat trouve avec tous les details (adresse, email).
  */
 void rechercher_emprunteur_par_carte(const Emprunteur *emprunteurs, int nb_emprunteurs, const char *numero_carte) {
     printf("\n");
@@ -169,15 +175,11 @@ void rechercher_emprunteur_par_carte(const Emprunteur *emprunteurs, int nb_empru
 
     for (int i = 0; i < nb_emprunteurs; i++) {
         if (strcmp(emprunteurs[i].numero_carte, numero_carte) == 0) {
-            printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
-            printf("  | ID   | No Carte     | Nom             | Prenom          | Telephone       | Em.|
-");
-            printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
+            printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
+            printf("  | ID   | No Carte     | Nom             | Prenom          | Telephone       | Em.|\n");
+            printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
             afficher_emprunteur(&emprunteurs[i]);
-            printf("  +------+--------------+-----------------+-----------------+-----------------+----+
-");
+            printf("  +------+--------------+-----------------+-----------------+-----------------+----+\n");
             printf("\n  Adresse  : %s\n", emprunteurs[i].adresse);
             printf("  Email    : %s\n", emprunteurs[i].email);
             return;
@@ -189,7 +191,9 @@ void rechercher_emprunteur_par_carte(const Emprunteur *emprunteurs, int nb_empru
 
 /*
  * Ajoute un nouvel emprunteur dans le tableau dynamique.
- * Genere automatiquement un numero de carte unique.
+ * Genere automatiquement un numero de carte unique au format CARTE-XXXX.
+ * Valide les donnees saisies (telephone, email).
+ * Alloue de la memoire si la capacite est insuffisante (realloc).
  * Retourne 1 en cas de succes, 0 en cas d'echec.
  */
 int ajouter_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capacite) {
@@ -200,7 +204,7 @@ int ajouter_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capac
     printf("\n");
     afficher_titre("AJOUT D'UN EMPRUNTEUR");
 
-    /* Generation de l'ID */
+    /* Generation automatique de l'ID et du numero de carte */
     for (int i = 0; i < *nb_emprunteurs; i++) {
         if ((*emprunteurs)[i].id > max_id) {
             max_id = (*emprunteurs)[i].id;
@@ -236,7 +240,7 @@ int ajouter_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capac
     strncpy(nouveau.adresse, buffer, ADRESSE_MAX - 1);
     nouveau.adresse[ADRESSE_MAX - 1] = '\0';
 
-    /* Saisie du telephone */
+    /* Saisie et validation du telephone */
     printf("  Telephone : ");
     if (!lire_chaine(buffer, sizeof(buffer)) || !valider_telephone(buffer)) {
         afficher_erreur("Numero de telephone invalide (minimum 8 chiffres).");
@@ -245,7 +249,7 @@ int ajouter_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capac
     strncpy(nouveau.telephone, buffer, TELEPHONE_MAX - 1);
     nouveau.telephone[TELEPHONE_MAX - 1] = '\0';
 
-    /* Saisie de l'email */
+    /* Saisie et validation de l'email */
     printf("  Email : ");
     if (!lire_chaine(buffer, sizeof(buffer)) || !valider_email(buffer)) {
         afficher_erreur("Adresse email invalide.");
@@ -254,21 +258,22 @@ int ajouter_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capac
     strncpy(nouveau.email, buffer, EMAIL_MAX - 1);
     nouveau.email[EMAIL_MAX - 1] = '\0';
 
+    /* Initialisation du compteur d'emprunts actifs */
     nouveau.nb_emprunts_actifs = 0;
 
-    /* Reallocation si necessaire */
+    /* Reallocation dynamique si le tableau est plein */
     if (*nb_emprunteurs >= *capacite) {
         int nouvelle_capacite = *capacite * 2;
         Emprunteur *temp = (Emprunteur *)realloc(*emprunteurs, nouvelle_capacite * sizeof(Emprunteur));
         if (temp == NULL) {
-            afficher_erreur("Erreur d'allocation memoire.");
+            afficher_erreur("Erreur d'allocation memoire. Impossible d'ajouter l'emprunteur.");
             return 0;
         }
         *emprunteurs = temp;
         *capacite = nouvelle_capacite;
     }
 
-    /* Ajout de l'emprunteur */
+    /* Ajout de l'emprunteur a la fin du tableau */
     (*emprunteurs)[*nb_emprunteurs] = nouveau;
     (*nb_emprunteurs)++;
 
@@ -281,6 +286,8 @@ int ajouter_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs, int *capac
 
 /*
  * Modifie les informations d'un emprunteur existant.
+ * L'utilisateur peut laisser vide pour conserver la valeur actuelle.
+ * Valide les nouvelles donnees (telephone, email).
  * Retourne 1 en cas de succes, 0 si non trouve.
  */
 int modifier_emprunteur(Emprunteur *emprunteurs, int nb_emprunteurs) {
@@ -323,7 +330,7 @@ int modifier_emprunteur(Emprunteur *emprunteurs, int nb_emprunteurs) {
         emprunteurs[index].adresse[ADRESSE_MAX - 1] = '\0';
     }
 
-    /* Modification du telephone */
+    /* Modification du telephone avec validation */
     printf("  Nouveau telephone [%s] : ", emprunteurs[index].telephone);
     if (lire_chaine(buffer, sizeof(buffer)) && strlen(buffer) > 0) {
         if (valider_telephone(buffer)) {
@@ -334,7 +341,7 @@ int modifier_emprunteur(Emprunteur *emprunteurs, int nb_emprunteurs) {
         }
     }
 
-    /* Modification de l'email */
+    /* Modification de l'email avec validation */
     printf("  Nouvel email [%s] : ", emprunteurs[index].email);
     if (lire_chaine(buffer, sizeof(buffer)) && strlen(buffer) > 0) {
         if (valider_email(buffer)) {
@@ -350,8 +357,9 @@ int modifier_emprunteur(Emprunteur *emprunteurs, int nb_emprunteurs) {
 }
 
 /*
- * Supprime un emprunteur du tableau.
- * Verifie qu'il n'a pas d'emprunts actifs avant suppression.
+ * Supprime un emprunteur du tableau dynamique.
+ * Verifie qu'il n'a pas d'emprunts actifs avant suppression (integrite referentielle).
+ * Decale les elements suivants pour combler le trou.
  * Retourne 1 en cas de succes, 0 si non trouve ou emprunts actifs.
  */
 int supprimer_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs) {
@@ -371,17 +379,19 @@ int supprimer_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs) {
     printf("\n  Emprunteur a supprimer :\n");
     afficher_emprunteur(&(*emprunteurs)[index]);
 
+    /* Verification : impossible de supprimer si emprunts actifs */
     if ((*emprunteurs)[index].nb_emprunts_actifs > 0) {
         afficher_erreur("Cet emprunteur a des emprunts actifs. Impossible de le supprimer.");
         return 0;
     }
 
+    /* Confirmation de l'utilisateur */
     if (!demander_confirmation("\n  Confirmer la suppression ?")) {
         afficher_info("Suppression annulee.");
         return 0;
     }
 
-    /* Decalage des elements */
+    /* Decalage des elements pour combler le trou */
     for (int i = index; i < *nb_emprunteurs - 1; i++) {
         (*emprunteurs)[i] = (*emprunteurs)[i + 1];
     }
@@ -394,12 +404,15 @@ int supprimer_emprunteur(Emprunteur **emprunteurs, int *nb_emprunteurs) {
 
 /*
  * Sauvegarde tous les emprunteurs dans un fichier binaire.
+ * Format du fichier : [int nb_emprunteurs][Emprunteur emprunteur1]...
+ * Gestion des erreurs : fichier inaccessible, erreur d'ecriture.
  * Retourne 1 en cas de succes, 0 en cas d'echec.
  */
 int sauvegarder_emprunteurs(const Emprunteur *emprunteurs, int nb_emprunteurs) {
     FILE *fichier = fopen(FICHIER_EMPRUNTEURS, "wb");
     if (fichier == NULL) {
         afficher_erreur("Impossible d'ouvrir le fichier de sauvegarde des emprunteurs.");
+        afficher_erreur(strerror(errno));
         return 0;
     }
 
@@ -423,7 +436,8 @@ int sauvegarder_emprunteurs(const Emprunteur *emprunteurs, int nb_emprunteurs) {
 
 /*
  * Charge les emprunteurs depuis un fichier binaire.
- * Alloue dynamiquement le tableau.
+ * Alloue dynamiquement le tableau avec la capacite initiale.
+ * Gestion des erreurs : fichier inexistant (premier demarrage), corruption, memoire insuffisante.
  * Retourne le nombre d'emprunteurs charges.
  */
 int charger_emprunteurs(Emprunteur **emprunteurs, int *capacite) {
@@ -431,6 +445,7 @@ int charger_emprunteurs(Emprunteur **emprunteurs, int *capacite) {
     int nb_emprunteurs = 0;
 
     if (fichier == NULL) {
+        /* Le fichier n'existe pas encore : c'est normal au premier demarrage */
         *capacite = CAPACITE_INITiale;
         *emprunteurs = (Emprunteur *)malloc(*capacite * sizeof(Emprunteur));
         if (*emprunteurs == NULL) {
@@ -442,7 +457,7 @@ int charger_emprunteurs(Emprunteur **emprunteurs, int *capacite) {
 
     if (fread(&nb_emprunteurs, sizeof(int), 1, fichier) != 1) {
         fclose(fichier);
-        afficher_erreur("Erreur lors de la lecture du fichier d'emprunteurs.");
+        afficher_erreur("Erreur lors de la lecture du fichier d'emprunteurs (fichier corrompu ?).");
         *capacite = CAPACITE_INITiale;
         *emprunteurs = (Emprunteur *)malloc(*capacite * sizeof(Emprunteur));
         return 0;
@@ -463,7 +478,7 @@ int charger_emprunteurs(Emprunteur **emprunteurs, int *capacite) {
             free(*emprunteurs);
             *emprunteurs = NULL;
             *capacite = 0;
-            afficher_erreur("Erreur lors de la lecture des emprunteurs.");
+            afficher_erreur("Erreur lors de la lecture des emprunteurs (fichier incomplet ?).");
             return 0;
         }
     }
@@ -474,6 +489,7 @@ int charger_emprunteurs(Emprunteur **emprunteurs, int *capacite) {
 
 /*
  * Libere la memoire allouee pour le tableau d'emprunteurs.
+ * Met le pointeur a NULL apres liberation pour eviter les dangling pointers.
  */
 void liberer_emprunteurs(Emprunteur **emprunteurs) {
     if (*emprunteurs != NULL) {
