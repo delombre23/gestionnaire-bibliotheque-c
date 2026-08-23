@@ -5,13 +5,13 @@
  * Prof. Patrick Mukala - UPN L2 Informatique 2025-2026
  */
 
-#define DATE_MAX 16
+#ifndef EMPRUNT_H
 #define EMPRUNT_H
 
 #include "livre.h"
 #include "emprunteur.h"
 
-#define DATE_MAX 12
+#define DATE_MAX 16
 #define FICHIER_EMPRUNTS "emprunts.dat"
 #define DUREE_EMPRUNT_JOURS 14      /* Duree d'emprunt standard : 14 jours */
 #define AMENDE_PAR_JOUR 500         /* Amende par jour de retard : 500 FC */
