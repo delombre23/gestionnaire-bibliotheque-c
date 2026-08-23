@@ -11,7 +11,7 @@
 #include <stdio.h>
 
 #define TAILLE_BUFFER 256
-#define CAPACITE_INITiale 10
+#define CAPACITE_INITIALE 10
 
 /*
  * Efface l'ecran de la console.
