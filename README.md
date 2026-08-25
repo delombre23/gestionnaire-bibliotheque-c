@@ -1,16 +1,23 @@
 # Gestionnaire de Bibliotheque
 
 **Projet de Programmation en Langage C**  
-**UPN - L2 Informatique - Prof. Patrick Mukala**  
+**UPN - L1 Informatique - Prof. Patrick Mukala**  
 **Annee academique 2025-2026**
 
 ---
 
 ## Auteur
 
-- **Nom** : [Ton nom complet]
-- **Matricule** : [Ton matricule]
-- **Groupe** : [Ton groupe]
+- **Groupe** : [MALEKAMA YUYA 
+LUKUSA SANZA
+TSHIMBUNDU MOKO
+LONGI KUSEKANA
+NGANDU ILUNGA 
+KAPUKU KAPUKU
+MINSAYI WAMBO
+KABAMBA KABAMBA 
+DIAMONEKA LUNTADILA
+KWADILU ZOLA]
 
 ---
 
